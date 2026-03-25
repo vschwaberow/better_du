@@ -101,7 +101,7 @@ private:
 };
 
 template <typename T>
-class MPSCQueue {
+class ThreadSafeQueue {
     std::mutex mutex_;
     std::queue<T> queue_;
 public:
@@ -132,7 +132,7 @@ struct DirNode {
         : path(std::move(p)), opts(o), parent(std::move(par)), depth(d) {}
 };
 
-void FinalizeNode(std::shared_ptr<DirNode> node, MPSCQueue<std::shared_ptr<DirNode>>& ui_queue) {
+void FinalizeNode(std::shared_ptr<DirNode> node, ThreadSafeQueue<std::shared_ptr<DirNode>>& ui_queue) {
     int remaining = --node->pending_children;
     if (remaining == 0) {
         ui_queue.push(node);
@@ -143,21 +143,28 @@ void FinalizeNode(std::shared_ptr<DirNode> node, MPSCQueue<std::shared_ptr<DirNo
     }
 }
 
-void ProcessDirectorySTD(const std::string& path, std::shared_ptr<DirNode> node, ThreadPool& pool, MPSCQueue<std::shared_ptr<DirNode>>& ui_queue, const std::optional<std::regex>& exclude_regex) {
+void ProcessDirectorySTD(const std::string& path, std::shared_ptr<DirNode> node, ThreadPool& pool, ThreadSafeQueue<std::shared_ptr<DirNode>>& ui_queue, const std::vector<std::regex>& exclude_regexes) {
     std::error_code ec;
     auto iter = std::filesystem::directory_iterator(path, std::filesystem::directory_options::skip_permission_denied, ec);
     if (!ec) {
         std::uintmax_t immediate_local_sum = 4096;
         for (const auto& entry : iter) {
             std::string name = entry.path().filename().string();
-            if (exclude_regex.has_value() && std::regex_search(name, exclude_regex.value())) continue;
+            bool excluded = false;
+            for (const auto& re : exclude_regexes) {
+                if (std::regex_search(name, re)) {
+                    excluded = true;
+                    break;
+                }
+            }
+            if (excluded) continue;
 
             if (entry.is_directory(ec)) {
                 node->pending_children++;
                 std::string child_path = entry.path().string();
                 auto child_node = std::make_shared<DirNode>(child_path, node->opts, node, node->depth + 1);
-                pool.enqueue([child_path, child_node, &pool, &ui_queue, exclude_regex]() {
-                    ProcessDirectorySTD(child_path, child_node, pool, ui_queue, exclude_regex);
+                pool.enqueue([child_path, child_node, &pool, &ui_queue, exclude_regexes]() {
+                    ProcessDirectorySTD(child_path, child_node, pool, ui_queue, exclude_regexes);
                 });
             } else {
                 immediate_local_sum += entry.file_size(ec);
@@ -266,22 +273,22 @@ void RenderTree(TreeDisplayNode* node, const std::string& prefix, bool is_last, 
 } // namespace
 
 std::expected<void, std::error_code> RunDiskUsage(const Options& opts) {
-  std::optional<std::regex> exclude_regex;
-  if (!opts.exclude_pattern.empty()) {
-      exclude_regex = std::regex(opts.exclude_pattern);
+  std::vector<std::regex> exclude_regexes;
+  for (const auto& pat : opts.exclude_patterns) {
+      exclude_regexes.emplace_back(pat);
   }
 
   unsigned int hw_threads = std::thread::hardware_concurrency();
+  ThreadSafeQueue<std::shared_ptr<DirNode>> ui_queue;
   ThreadPool pool(hw_threads == 0 ? 4 : hw_threads);
-  MPSCQueue<std::shared_ptr<DirNode>> ui_queue;
 
   auto super_root = std::make_shared<DirNode>("", &opts, nullptr, -1);
   super_root->pending_children = opts.paths.size();
 
   for (const auto& p : opts.paths) {
     auto path_root = std::make_shared<DirNode>(p, &opts, super_root, 0);
-    pool.enqueue([p_str = p, path_root, &pool, &ui_queue, exclude_regex]() {
-        ProcessDirectorySTD(p_str, path_root, pool, ui_queue, exclude_regex);
+    pool.enqueue([p_str = p, path_root, &pool, &ui_queue, exclude_regexes]() {
+        ProcessDirectorySTD(p_str, path_root, pool, ui_queue, exclude_regexes);
     });
   }
 

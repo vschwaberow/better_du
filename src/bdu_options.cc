@@ -80,7 +80,7 @@ ParseResult ParseOptions(const std::vector<std::string_view> &args) {
         continue;
       }
       if (arg.starts_with("--exclude=")) {
-        opts.exclude_pattern = std::string(arg.substr(10));
+        opts.exclude_patterns.push_back(std::string(arg.substr(10)));
         continue;
       }
       if (arg.starts_with("--max-depth=")) {

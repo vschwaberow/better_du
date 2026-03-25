@@ -43,7 +43,7 @@ struct Options {
   bool show_progress = false;
   bool show_bars = true;
   int top_n = -1;
-  std::string exclude_pattern;
+  std::vector<std::string> exclude_patterns;
 
   std::vector<std::string> paths;
 };
