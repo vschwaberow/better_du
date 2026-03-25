@@ -1,15 +1,15 @@
-name: CMake Build Matrix
+name: Release Build and Publish
 
 on:
-  push:
-    branches: [ "master", "main" ]
-  pull_request:
-    branches: [ "master", "main" ]
+  release:
+    types: [published]
 
 jobs:
   build:
     name: Build on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -23,3 +23,17 @@ jobs:
 
     - name: Build
       run: cmake --build ${{github.workspace}}/build --config Release
+
+    - name: Prepare Binary (Linux/macOS)
+      if: runner.os != 'Windows'
+      run: mv ${{github.workspace}}/build/bdu ${{github.workspace}}/bdu-${{ runner.os }}-${{ runner.arch }}
+
+    - name: Prepare Binary (Windows)
+      if: runner.os == 'Windows'
+      shell: cmd
+      run: move "${{github.workspace}}\\build\\Release\\bdu.exe" "${{github.workspace}}\\bdu-${{ runner.os }}-${{ runner.arch }}.exe"
+
+    - name: Upload Release Artifacts
+      uses: softprops/action-gh-release@v2
+      with:
+        files: bdu-*

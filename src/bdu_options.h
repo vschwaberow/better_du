@@ -19,12 +19,12 @@
 
 #include <expected>
 #include <string>
-#include <vector>
 #include <string_view>
+#include <vector>
 
 namespace bdu {
 
-constexpr std::string_view kVersionString = "0.1.0";
+constexpr std::string_view kVersionString = "0.1.1";
 
 struct Options {
   bool all = false;
@@ -43,14 +43,14 @@ struct Options {
   bool show_progress = false;
   bool show_bars = true;
   int top_n = -1;
-  std::string exclude_pattern;
+  std::vector<std::string> exclude_patterns;
 
   std::vector<std::string> paths;
 };
 
 using ParseResult = std::expected<Options, std::string>;
 
-ParseResult ParseOptions(const std::vector<std::string_view>& args);
+ParseResult ParseOptions(const std::vector<std::string_view> &args);
 
 } // namespace bdu
 
