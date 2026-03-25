@@ -5,10 +5,18 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-add_compile_options(
-    -Wall -Wextra -Wpedantic -Werror
-    -fno-exceptions -fno-rtti
-)
+if(MSVC)
+    add_compile_options(
+        /W4 /WX
+        /EHs-c- /GR-
+    )
+    add_compile_definitions(_HAS_EXCEPTIONS=0)
+else()
+    add_compile_options(
+        -Wall -Wextra -Wpedantic -Werror
+        -fno-exceptions -fno-rtti
+    )
+endif()
 
 add_executable(bdu
     src/main.cc
@@ -19,7 +27,8 @@ add_executable(bdu
 include(FetchContent)
 FetchContent_Declare(
   googletest
-  URL https://github.com/google/googletest/archive/03597a01ee50ed33e9dfd640b249b4be3799d395.zip
+  GIT_REPOSITORY https://github.com/google/googletest.git
+  GIT_TAG        v1.17.0
 )
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
